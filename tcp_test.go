@@ -3,6 +3,7 @@ package modbus_test
 import (
 	"math/rand/v2"
 	"net"
+	"os"
 	"testing"
 	"time"
 
@@ -10,7 +11,12 @@ import (
 )
 
 func testTCPClient(t *testing.T) *modbus.TCPClient {
-	conn, err := net.Dial("tcp", "localhost:5020")
+	addr := os.Getenv("TEST_MODBUS_ADDR")
+	if addr == "" {
+		addr = "localhost:5020"
+	}
+
+	conn, err := net.Dial("tcp", addr)
 	if err != nil {
 		t.Fatal("no connection to the test server:", err)
 	}
