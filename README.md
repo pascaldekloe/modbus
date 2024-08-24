@@ -1,4 +1,5 @@
 [![API Documentation](https://godoc.org/github.com/pascaldekloe/modbus?status.svg)](https://godoc.org/github.com/pascaldekloe/modbus)
+[![Build Status](https://github.com/pascaldekloe/modbus/actions/workflows/go.yml/badge.svg)](https://github.com/pascaldekloe/modbus/actions/workflows/go.yml)
 
 # Modbus
 
