@@ -15,7 +15,7 @@ type TCPClient struct {
 	// The function code starts at the 8th byte, right
 	// after its 7-byte MBAP-header.
 	// Keep first in struct for memory alignment.
-	buf [260]byte
+	buf [7 + 253]byte
 
 	// The defaults from net.Dial are good here.
 	net.Conn
@@ -41,8 +41,7 @@ func (c *TCPClient) ReadHoldReg(addr uint16) (uint16, error) {
 }
 
 func (c *TCPClient) readReg(addr uint16, funcCode byte) (uint16, error) {
-	binary.BigEndian.PutUint16(c.buf[8:10], addr)
-	binary.BigEndian.PutUint16(c.buf[10:12], 1)
+	binary.BigEndian.PutUint32(c.buf[8:12], uint32(addr)<<16|1)
 	readN, err := c.sendAndReceive(c.buf[:12], funcCode)
 	if err != nil {
 		return 0, err
@@ -165,8 +164,7 @@ func (c *TCPClient) readRegs(buf []uint16, startAddr uint16, funcCode byte) erro
 
 func (c *TCPClient) readNRegs(n int, startAddr uint16, funcCode byte) error {
 	// compose request
-	binary.BigEndian.PutUint16(c.buf[8:10], startAddr)
-	binary.BigEndian.PutUint16(c.buf[10:12], uint16(n))
+	binary.BigEndian.PutUint32(c.buf[8:12], uint32(startAddr)<<16|uint32(n))
 
 	readN, err := c.sendAndReceive(c.buf[:12], funcCode)
 	if err != nil {
@@ -215,8 +213,8 @@ func (c *TCPClient) readNRegSlice(n int, startAddr uint16, funcCode byte) ([]byt
 
 // WriteReg updates a single register.
 func (c *TCPClient) WriteReg(addr, value uint16) error {
-	binary.BigEndian.PutUint16(c.buf[8:10], addr)
-	binary.BigEndian.PutUint16(c.buf[10:12], value)
+	order := uint32(addr)<<16 | uint32(value)
+	binary.BigEndian.PutUint32(c.buf[8:12], order)
 	readN, err := c.sendAndReceive(c.buf[:12], writeReg)
 	if err != nil {
 		return err
@@ -225,10 +223,11 @@ func (c *TCPClient) WriteReg(addr, value uint16) error {
 	if readN != 12 {
 		return errFrameFit
 	}
-	if binary.BigEndian.Uint16(c.buf[8:10]) != addr {
-		return errAddrMatch
-	}
-	if binary.BigEndian.Uint16(c.buf[10:12]) != value {
+	did := binary.BigEndian.Uint32(c.buf[8:12])
+	if did != order {
+		if did>>16 != order>>16 {
+			return errAddrMatch
+		}
 		return errValueMatch
 	}
 	return nil
@@ -244,8 +243,8 @@ func (c *TCPClient) WriteRegs(startAddr uint16, values ...uint16) error {
 		return ErrLimit
 	}
 
-	binary.BigEndian.PutUint16(c.buf[8:10], startAddr)
-	binary.BigEndian.PutUint16(c.buf[10:12], uint16(len(values)))
+	order := uint32(startAddr)<<16 | uint32(len(values))
+	binary.BigEndian.PutUint32(c.buf[8:12], order)
 	c.buf[12] = byte(len(values) * 2)
 	for i := range values {
 		binary.BigEndian.PutUint16(c.buf[13+(2*i):15+(2*i)], values[i])
@@ -258,10 +257,11 @@ func (c *TCPClient) WriteRegs(startAddr uint16, values ...uint16) error {
 	if readN != 12 {
 		return errFrameFit
 	}
-	if binary.BigEndian.Uint16(c.buf[8:10]) != startAddr {
-		return errAddrMatch
-	}
-	if binary.BigEndian.Uint16(c.buf[10:12]) != uint16(len(values)) {
+	did := binary.BigEndian.Uint32(c.buf[8:12])
+	if did != order {
+		if did>>16 != order>>16 {
+			return errAddrMatch
+		}
 		return errWriteNMatch
 	}
 	return nil
