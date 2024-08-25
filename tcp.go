@@ -1,4 +1,3 @@
-// Package modbus provides an implementation of the Modbus communication protocol.
 package modbus
 
 import (
@@ -10,6 +9,7 @@ import (
 )
 
 // TCPClient manages a connection for use from witin a single goroutine.
+// Transactions are dealt with sequentially—only one request at a time.
 type TCPClient struct {
 	// Buf is (re)used for both reading and writing.
 	// The function code starts at the 8th byte, right
@@ -17,6 +17,7 @@ type TCPClient struct {
 	// Keep first in struct for memory alignment.
 	buf [260]byte
 
+	// The defaults from net.Dial are good here.
 	net.Conn
 
 	// read-only transaction counter
@@ -48,7 +49,7 @@ func (c *TCPClient) readReg(addr uint16, funcCode byte) (uint16, error) {
 	}
 
 	if c.buf[8] != 2 {
-		return 0, fmt.Errorf("modbus got %d-byte payload in response for single register request",
+		return 0, fmt.Errorf("modbus %d-byte payload in response of 1-register request",
 			c.buf[8])
 	}
 	if readN != 11 {
@@ -173,7 +174,7 @@ func (c *TCPClient) readNRegs(n int, startAddr uint16, funcCode byte) error {
 	}
 
 	if int(uint(c.buf[8])) != n*2 {
-		return fmt.Errorf("modbus got a %d-byte payload response for a %d-register request",
+		return fmt.Errorf("modbus got %d-byte payload in response of %d-register request",
 			c.buf[1], n)
 	}
 	if readN != 9+n*2 {

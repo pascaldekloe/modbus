@@ -1,4 +1,7 @@
 // Package modbus implements Modbus protocol from the client perspective.
+//
+// Registers are 16-bit values with a 16-bit address each. Input registers are
+// read-only, while holding registers allow for updates.
 package modbus
 
 import (
@@ -8,18 +11,19 @@ import (
 
 // Standardised Error Codes
 const (
-	ErrFunc   Exception = 1
-	ErrAddr   Exception = 2
-	ErrValue  Exception = 3
-	ErrDev    Exception = 4
-	ErrAck    Exception = 5
-	ErrBusy   Exception = 6
-	ErrParity Exception = 8
+	ErrFunc   Exception = 1 // illegal function
+	ErrAddr   Exception = 2 // illegal data address
+	ErrValue  Exception = 3 // illegal data value
+	ErrDev    Exception = 4 // server device failure
+	ErrAck    Exception = 5 // acknowledge
+	ErrBusy   Exception = 6 // server device bussy
+	ErrParity Exception = 8 // memory parity error
 
-	ErrGatePath   Exception = 0xA
-	ErrGateTarget Exception = 0xB
+	ErrGatePath   Exception = 0xA // gateway path unavailable
+	ErrGateTarget Exception = 0xB // gateway target device failed to respond
 )
 
+// Exception is an error response.
 type Exception byte
 
 // Error implements the builtin.error interface.
