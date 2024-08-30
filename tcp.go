@@ -26,7 +26,9 @@ type TCPClient struct {
 	// read-only packet-fragementation counter (should be a rare occurrence)
 	FragN uint64
 
-	// optional unit-identifier
+	// The unit-identifier is supposed to be 0xFF with TCP.
+	// Broadcast address 0x00 “is also accepted”. In practice,
+	// quite a few devices out there only respond to 0x01.
 	UnitID byte
 }
 
