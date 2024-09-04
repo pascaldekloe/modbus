@@ -56,6 +56,25 @@ func (c *TCPClient) readReg(addr uint16, funcCode byte) (uint16, error) {
 	return binary.BigEndian.Uint16(c.buf[9:11]), nil
 }
 
+func (c *TCPClient) readNRegs(n int, startAddr uint16, funcCode byte) error {
+	// compose request
+	binary.BigEndian.PutUint32(c.buf[8:12], uint32(startAddr)<<16|uint32(n))
+
+	readN, err := c.sendAndReceive(c.buf[:12], funcCode)
+	if err != nil {
+		return err
+	}
+
+	if int(uint(c.buf[8])) != n*2 {
+		return fmt.Errorf("Modbus got %d-byte payload in response of %d-register request",
+			c.buf[1], n)
+	}
+	if readN != 9+n*2 {
+		return errFrameFit
+	}
+	return nil
+}
+
 // SendAndReceive writes the frame header plus function code in c.buf[:8] before
 // submission. The req slice must include c.buf[:8] as such. The read count also
 // includes the frame header.
@@ -170,25 +189,6 @@ func (c *TCPClient) readRegs(buf []uint16, startAddr uint16, funcCode byte) erro
 	// map read buffer into register buffer
 	for i := range buf {
 		buf[i] = binary.BigEndian.Uint16(c.buf[9+i*2 : 11+i*2])
-	}
-	return nil
-}
-
-func (c *TCPClient) readNRegs(n int, startAddr uint16, funcCode byte) error {
-	// compose request
-	binary.BigEndian.PutUint32(c.buf[8:12], uint32(startAddr)<<16|uint32(n))
-
-	readN, err := c.sendAndReceive(c.buf[:12], funcCode)
-	if err != nil {
-		return err
-	}
-
-	if int(uint(c.buf[8])) != n*2 {
-		return fmt.Errorf("Modbus got %d-byte payload in response of %d-register request",
-			c.buf[1], n)
-	}
-	if readN != 9+n*2 {
-		return errFrameFit
 	}
 	return nil
 }
