@@ -184,7 +184,7 @@ func (c *TCPClient) readNRegs(n int, startAddr uint16, funcCode byte) error {
 	}
 
 	if int(uint(c.buf[8])) != n*2 {
-		return fmt.Errorf("modbus got %d-byte payload in response of %d-register request",
+		return fmt.Errorf("Modbus got %d-byte payload in response of %d-register request",
 			c.buf[1], n)
 	}
 	if readN != 9+n*2 {

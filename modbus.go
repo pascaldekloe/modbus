@@ -30,25 +30,25 @@ type Exception byte
 func (e Exception) Error() string {
 	switch e {
 	case ErrFunc:
-		return "modbus exception 0x01: illegal function"
+		return "Modbus exception 0x01: illegal function"
 	case ErrAddr:
-		return "modbus exception 0x02: illegal data address"
+		return "Modbus exception 0x02: illegal data address"
 	case ErrValue:
-		return "modbus exception 0x03: illegal data value"
+		return "Modbus exception 0x03: illegal data value"
 	case ErrDev:
-		return "modbus exception 0x04: server device failure"
+		return "Modbus exception 0x04: server device failure"
 	case ErrAck:
-		return "modbus exception 0x05: acknowldege"
+		return "Modbus exception 0x05: acknowldege"
 	case ErrBusy:
-		return "modbus exception 0x06: server device busy"
+		return "Modbus exception 0x06: server device busy"
 	case ErrParity:
-		return "modbus exception 0x08: memory parity error"
+		return "Modbus exception 0x08: memory parity error"
 	case ErrGatePath:
-		return "modbus exception 0x0A: gateway path unavailable"
+		return "Modbus exception 0x0A: gateway path unavailable"
 	case ErrGateTarget:
-		return "modbus exception 0x0B: gateway target device failed to respond"
+		return "Modbus exception 0x0B: gateway target device failed to respond"
 	}
-	return fmt.Sprintf("modbus exception 0x%#02X", e)
+	return fmt.Sprintf("Modbus exception 0x%#02X", e)
 }
 
 // ErrLimit denies a request based on the amount of values requested.
