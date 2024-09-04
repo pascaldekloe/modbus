@@ -5,7 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net"
+	"time"
 )
 
 // TCPClient manages a connection for use from witin a single goroutine.
@@ -19,6 +21,10 @@ type TCPClient struct {
 
 	// The defaults from net.Dial are good here.
 	net.Conn
+
+	// Limit the time for a request–response pair on connection level.
+	// The zero value omits timeout protection entirely.
+	TxTimeout time.Duration
 
 	// read-only transaction counter
 	TxN uint64
@@ -64,6 +70,19 @@ func (c *TCPClient) readReg(addr uint16, funcCode byte) (uint16, error) {
 // includes the frame header.
 func (c *TCPClient) sendAndReceive(req []byte, funcCode byte) (readN int, err error) {
 	c.TxN++
+
+	if c.TxTimeout != 0 {
+		err := c.Conn.SetDeadline(time.Now().Add(c.TxTimeout))
+		if err != nil {
+			return 0, fmt.Errorf("timeout on Modbus connection needed: %w", err)
+		}
+		defer func() {
+			err := c.Conn.SetDeadline(time.Time{})
+			if err != nil { // probably never
+				log.Println("timeout on Modbus connection got stuck:", err)
+			}
+		}()
+	}
 
 	// See “MBAP Header description” from chapter 3.1.3 of “MODBUS Messaging
 	// on TCP/IP Implementation Guide V1.0b” for the specification.
