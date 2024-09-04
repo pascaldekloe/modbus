@@ -139,12 +139,16 @@ func (c *TCPClient) sendAndReceive(req []byte, funcCode byte) (readN int, err er
 			resHead, reqHead)
 	}
 
-	lenOfNext := (resHead >> 16) & 0xffff
-	end := int(lenOfNext + 6)
-	if end != readN {
-		if end < readN {
-			return readN, errors.New("Modbus response reception exceeds MBAP frame length")
-		}
+	remainLen := (resHead >> 16) & 0xffff
+	end := int(remainLen + 6)
+	switch {
+	case end == readN:
+		break // happy flow
+	case end < readN:
+		return readN, errors.New("Modbus response reception exceeds frame length")
+	case end > len(c.buf):
+		return readN, errors.New("Modbus frame size exceeds reponse [PDU] limit")
+	default:
 		// packet fragmentation should be a rare occurrence
 		c.FragN++
 
@@ -155,9 +159,9 @@ func (c *TCPClient) sendAndReceive(req []byte, funcCode byte) (readN int, err er
 			}
 			return readN, fmt.Errorf("Modbus response frame incomplete: %w", err)
 		}
-
 		readN = end
 	}
+
 	return readN, nil
 }
 
