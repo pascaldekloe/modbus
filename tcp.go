@@ -49,18 +49,9 @@ func (c *TCPClient) ReadHoldReg(addr uint16) (uint16, error) {
 }
 
 func (c *TCPClient) readReg(addr uint16, funcCode byte) (uint16, error) {
-	binary.BigEndian.PutUint32(c.buf[8:12], uint32(addr)<<16|1)
-	readN, err := c.sendAndReceive(c.buf[:12], funcCode)
+	err := c.readNRegs(1, addr, funcCode)
 	if err != nil {
 		return 0, err
-	}
-
-	if c.buf[8] != 2 {
-		return 0, fmt.Errorf("modbus %d-byte payload in response of 1-register request",
-			c.buf[8])
-	}
-	if readN != 11 {
-		return 0, errFrameFit
 	}
 	return binary.BigEndian.Uint16(c.buf[9:11]), nil
 }
