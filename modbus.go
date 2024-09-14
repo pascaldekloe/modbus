@@ -5,8 +5,10 @@
 package modbus
 
 import (
+	"encoding/binary"
 	"errors"
 	"fmt"
+	"math"
 )
 
 // Standardised Error Codes
@@ -81,3 +83,15 @@ const (
 
 	errorFlag = 0x80
 )
+
+// RegPairFloat extracts a single-precission floating-point from two registers.
+func RegPairFloat(p *[4]byte) float32 {
+	bits := binary.BigEndian.Uint32(p[:4])
+	return math.Float32frombits(bits)
+}
+
+// RegQuadFloat extracts a double-precission floating-point from four registers.
+func RegQuadFloat(p *[8]byte) float64 {
+	bits := binary.BigEndian.Uint64(p[:8])
+	return math.Float64frombits(bits)
+}

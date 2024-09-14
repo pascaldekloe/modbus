@@ -1,6 +1,8 @@
 package modbus_test
 
 import (
+	"io"
+	"log"
 	"math/rand/v2"
 	"os"
 	"testing"
@@ -8,6 +10,28 @@ import (
 
 	"github.com/pascaldekloe/modbus"
 )
+
+func init() {
+	log.SetOutput(io.Discard)
+}
+
+func Example() {
+	client, err := modbus.TCPDial("localhost:502", time.Second)
+	if err != nil {
+		log.Print("no connection: ", err)
+		return
+	}
+
+	borrow, err := client.ReadNHoldRegSlice(2, 1001)
+	if err != nil {
+		log.Print("registers unavailable: ", err)
+		return
+	}
+
+	f := modbus.RegPairFloat((*[4]byte)(borrow))
+	log.Printf("register 1001 and 1002 contain %f", f)
+	// Output:
+}
 
 func testTCPClient(t *testing.T) *modbus.TCPClient {
 	addr := os.Getenv("TEST_MODBUS_ADDR")
