@@ -10,6 +10,40 @@ import (
 	"time"
 )
 
+// TCPDial connects with a lean setup.
+func TCPDial(addr string, timeout time.Duration) (*TCPClient, error) {
+	d := net.Dialer{
+		Timeout:   timeout,
+		KeepAlive: -1, // disabled
+	}
+	conn, err := d.Dial("tcp", addr)
+	if err != nil {
+		return nil, err
+	}
+	client := TCPClient{
+		Conn:      conn,
+		TxTimeout: timeout,
+		UnitID:    0xff,
+	}
+
+	t, ok := conn.(*net.TCPConn)
+	if !ok {
+		return nil, errors.Join(
+			fmt.Errorf("TCP dial got connection type %T", conn),
+			conn.Close(),
+		)
+	}
+	err = t.SetReadBuffer(512)
+	if err != nil {
+		return nil, errors.Join(err, conn.Close())
+	}
+	err = t.SetWriteBuffer(512)
+	if err != nil {
+		return nil, errors.Join(err, conn.Close())
+	}
+	return &client, nil
+}
+
 // TCPClient manages a connection for use from witin a single goroutine.
 // Transactions are dealt with sequentially—only one request at a time.
 //

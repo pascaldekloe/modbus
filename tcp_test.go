@@ -2,7 +2,6 @@ package modbus_test
 
 import (
 	"math/rand/v2"
-	"net"
 	"os"
 	"testing"
 	"time"
@@ -16,21 +15,24 @@ func testTCPClient(t *testing.T) *modbus.TCPClient {
 		addr = "localhost:5020"
 	}
 
-	conn, err := net.Dial("tcp", addr)
+	client, err := modbus.TCPDial(addr, time.Second/2)
 	if err != nil {
-		t.Fatal("no connection to the test server:", err)
+		t.Fatal("no connection to test server:", err)
 	}
 
 	t.Cleanup(func() {
-		err := conn.Close()
+		err := client.Close()
 		if err != nil {
-			t.Error("connection shutdown:", err)
+			t.Error("connection leak:", err)
 		}
 	})
 
-	conn.SetDeadline(time.Now().Add(time.Second))
+	// test timeout on connection level
+	client.SetDeadline(time.Now().Add(time.Second))
+	// disable time management of client
+	client.TxTimeout = 0
 
-	return &modbus.TCPClient{Conn: conn}
+	return client
 }
 
 func TestTCPRegSingle(t *testing.T) {
