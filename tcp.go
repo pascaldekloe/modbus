@@ -12,10 +12,12 @@ import (
 
 // TCPClient manages a connection for use from witin a single goroutine.
 // Transactions are dealt with sequentially—only one request at a time.
+//
+// Any errors other than Exception or ErrLimit are fatal to the client.
+// Reuse with a new net.Conn is permitted.
 type TCPClient struct {
-	// Buf is (re)used for both reading and writing.
-	// The function code starts at the 8th byte, right
-	// after its 7-byte MBAP-header.
+	// Buf is (re)used for both reading and writing. The function code
+	// starts at the 8th byte, right after its 7-byte MBAP-header.
 	// Keep first in struct for memory alignment.
 	buf [7 + 253]byte
 
@@ -23,13 +25,13 @@ type TCPClient struct {
 	net.Conn
 
 	// Limit the time for a request–response pair on connection level.
-	// The zero value omits timeout protection entirely.
+	// The zero value omits timeout protection.
 	TxTimeout time.Duration
 
 	// read-only transaction counter
 	TxN uint64
 
-	// read-only packet-fragementation counter (should be a rare occurrence)
+	// read-only packet-fragementation counter (should be low if any)
 	FragN uint64
 
 	// The unit-identifier is supposed to be 0xFF with TCP.

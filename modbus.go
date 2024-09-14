@@ -1,4 +1,4 @@
-// Package modbus implements Modbus protocol from the client perspective.
+// Package modbus implements the Modbus protocol from a client perspective.
 //
 // Registers are 16-bit values with a 16-bit address each. Input registers are
 // read-only, while holding registers allow for updates.
