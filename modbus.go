@@ -2,6 +2,9 @@
 //
 // Registers are 16-bit values with a 16-bit address each. Input registers are
 // read-only, while holding registers allow for updates.
+//
+// Modbus is big-endian per specification. Deviation with little-endian
+// can be translated with bits.ReverseBytes16.
 package modbus
 
 import (
