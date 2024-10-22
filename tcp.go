@@ -223,7 +223,7 @@ func (c *TCPClient) sendAndReceive(req []byte, funcCode byte) (readN int, err er
 		return readN, Exception(c.buf[8])
 
 	default:
-		err = fmt.Errorf("Modbus response frame %#08x… does not match request frame %#08x…",
+		err = fmt.Errorf("Modbus response frame %#016x… does not match request frame %#016x…",
 			resHead, reqHead)
 		return readN, c.fail(err)
 	}
