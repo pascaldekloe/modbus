@@ -16,11 +16,12 @@ func init() {
 }
 
 func Example() {
-	client, err := modbus.TCPDial("localhost:502", time.Second)
-	if err != nil {
-		log.Print("no connection: ", err)
-		return
+	client := modbus.TCPClient{
+		RemoteAddr: "localhost:502",
+		TxTimeout:  time.Second,
+		UnitID:     0x01,
 	}
+	defer client.Close()
 
 	borrow, err := client.ReadNHoldRegSlice(2, 1001)
 	if err != nil {

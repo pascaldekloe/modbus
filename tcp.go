@@ -10,52 +10,39 @@ import (
 	"time"
 )
 
-// TCPDial connects with a lean setup.
+// TCPDial establishes a connection for fail-fast behaviour. The unit-identifier
+// can be adjusted after TCPDial when needed.
 func TCPDial(addr string, timeout time.Duration) (*TCPClient, error) {
-	d := net.Dialer{
-		Timeout:   timeout,
-		KeepAlive: -1, // disabled
+	c := &TCPClient{
+		RemoteAddr: addr,
+		TxTimeout:  timeout,
+		// correct default
+		UnitID: 0xff,
 	}
-	conn, err := d.Dial("tcp", addr)
+
+	err := c.ensureConn()
 	if err != nil {
 		return nil, err
 	}
-	client := TCPClient{
-		Conn:      conn,
-		TxTimeout: timeout,
-		UnitID:    0xff,
-	}
-
-	t, ok := conn.(*net.TCPConn)
-	if !ok {
-		return nil, errors.Join(
-			fmt.Errorf("TCP dial got connection type %T", conn),
-			conn.Close(),
-		)
-	}
-	err = t.SetReadBuffer(512)
-	if err != nil {
-		return nil, errors.Join(err, conn.Close())
-	}
-	err = t.SetWriteBuffer(512)
-	if err != nil {
-		return nil, errors.Join(err, conn.Close())
-	}
-	return &client, nil
+	return c, nil
 }
 
-// TCPClient manages a connection for use from witin a single goroutine.
+// TCPClient manages a connection for use from within a single goroutine.
 // Transactions are dealt with sequentially—only one request at a time.
 //
-// Any errors other than Exception or ErrLimit are fatal to the client.
-// Reuse with a new net.Conn is permitted.
+// The client connects to .RemoteAddr on demand [lazy] whenever .Conn is nil.
+// Errors fatal to the connection cause an automated Close, which includes the
+// reset to nil.
 type TCPClient struct {
 	// Buf is (re)used for both reading and writing. The function code
 	// starts at the 8th byte, right after its 7-byte MBAP-header.
 	// Keep first in struct for memory alignment.
 	buf [7 + 253]byte
 
-	// The defaults from net.Dial are good here.
+	// Specify the <host>:<port> to connect with.
+	RemoteAddr string
+
+	// Nil implies no connection.
 	net.Conn
 
 	// Limit the time for a request–response pair on connection level.
@@ -65,13 +52,69 @@ type TCPClient struct {
 	// read-only transaction counter
 	TxN uint64
 
-	// read-only packet-fragementation counter (should be low if any)
+	// read-only packet-fragmentation counter (should be low if any)
 	FragN uint64
 
-	// The unit-identifier is supposed to be 0xFF with TCP.
+	// The unit identifier is supposed to be 0xFF with TCP.
 	// Broadcast address 0x00 “is also accepted”. In practice,
 	// quite a few devices out there only respond to 0x01.
 	UnitID byte
+}
+
+// Close and zero the connection, if any.
+func (c *TCPClient) Close() error {
+	if c.Conn == nil {
+		return nil
+	}
+	err := c.Conn.Close()
+	c.Conn = nil
+	return err
+}
+
+// Fail the connection with a reset.
+func (c *TCPClient) fail(cause error) error {
+	err := c.Close()
+	if err != nil {
+		return errors.Join(cause, err)
+	}
+	return cause
+}
+
+// EnsureConn creates a connection when not connected.
+func (c *TCPClient) ensureConn() error {
+	if c.Conn != nil {
+		return nil
+	}
+
+	d := net.Dialer{
+		Timeout:   c.TxTimeout,
+		KeepAlive: -1, // disabled
+	}
+	conn, err := d.Dial("tcp", c.RemoteAddr)
+	if err != nil {
+		return err
+	}
+
+	err = trimTCPConn(conn)
+	if err != nil {
+		return errors.Join(err, conn.Close())
+	}
+
+	c.Conn = conn
+	return nil
+}
+
+// TrimTCPConn utilizes the small footprint of Modbus frames.
+func trimTCPConn(conn net.Conn) error {
+	t, ok := conn.(*net.TCPConn)
+	if !ok {
+		return fmt.Errorf("TCP dial got connection type %T", conn)
+	}
+	err := t.SetReadBuffer(512)
+	if err != nil {
+		return err
+	}
+	return t.SetWriteBuffer(512)
 }
 
 // ReadInputReg fetches an input register at the given address.
@@ -115,13 +158,20 @@ func (c *TCPClient) readNRegs(n int, startAddr uint16, funcCode byte) error {
 // submission. The req slice must include c.buf[:8] as such. The read count also
 // includes the frame header.
 func (c *TCPClient) sendAndReceive(req []byte, funcCode byte) (readN int, err error) {
+	err = c.ensureConn()
+	if err != nil {
+		return 0, err
+	}
+
 	c.TxN++
 
 	if c.TxTimeout != 0 {
 		err := c.Conn.SetDeadline(time.Now().Add(c.TxTimeout))
 		if err != nil {
-			return 0, fmt.Errorf("timeout on Modbus connection needed: %w", err)
+			err = fmt.Errorf("timeout on Modbus connection needed: %w", err)
+			return 0, c.fail(err)
 		}
+
 		defer func() {
 			err := c.Conn.SetDeadline(time.Time{})
 			if err != nil { // probably never
@@ -148,12 +198,14 @@ func (c *TCPClient) sendAndReceive(req []byte, funcCode byte) (readN int, err er
 
 	_, err = c.Write(req)
 	if err != nil {
-		return 0, fmt.Errorf("Modbus request submission: %w", err)
+		err = fmt.Errorf("Modbus request submission: %w", err)
+		return 0, c.fail(err)
 	}
 
 	readN, err = io.ReadAtLeast(c.Conn, c.buf[:], 9)
 	if err != nil {
-		return readN, fmt.Errorf("Modbus response unavailable: %w", err)
+		err = fmt.Errorf("Modbus response unavailable: %w", err)
+		return readN, c.fail(err)
 	}
 	resHead := binary.BigEndian.Uint64(c.buf[:8])
 
@@ -166,13 +218,14 @@ func (c *TCPClient) sendAndReceive(req []byte, funcCode byte) (readN int, err er
 
 	case (reqHead &^ sizeMask) | errorFlag:
 		if readN != 9 {
-			return readN, errFrameFit
+			return readN, c.fail(errFrameFit)
 		}
 		return readN, Exception(c.buf[8])
 
 	default:
-		return readN, fmt.Errorf("Modbus response frame %#08x… does not match request frame %#08x…",
+		err = fmt.Errorf("Modbus response frame %#08x… does not match request frame %#08x…",
 			resHead, reqHead)
+		return readN, c.fail(err)
 	}
 
 	remainLen := (resHead >> 16) & 0xffff
@@ -180,10 +233,13 @@ func (c *TCPClient) sendAndReceive(req []byte, funcCode byte) (readN int, err er
 	switch {
 	case end == readN:
 		break // happy flow
+
 	case end < readN:
-		return readN, errors.New("Modbus response reception exceeds frame length")
+		err = errors.New("Modbus response reception exceeds frame length")
+		return readN, c.fail(err)
 	case end > len(c.buf):
-		return readN, errors.New("Modbus frame size exceeds reponse [PDU] limit")
+		err = errors.New("Modbus frame size exceeds reponse [PDU] limit")
+		return readN, c.fail(err)
 	default:
 		// packet fragmentation should be a rare occurrence
 		c.FragN++
@@ -193,7 +249,8 @@ func (c *TCPClient) sendAndReceive(req []byte, funcCode byte) (readN int, err er
 			if errors.Is(err, io.EOF) {
 				err = io.ErrUnexpectedEOF
 			}
-			return readN, fmt.Errorf("Modbus response frame incomplete: %w", err)
+			err = fmt.Errorf("Modbus response frame incomplete: %w", err)
+			return readN, c.fail(err)
 		}
 		readN = end
 	}

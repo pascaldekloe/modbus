@@ -9,6 +9,20 @@ This is free and unencumbered software released into the
 [public domain](http://creativecommons.org/publicdomain/zero/1.0).
 
 
+# Use
+
+Connections are handled automagically including reconnects when needed.
+
+```go
+	client := modbus.TCPClient{
+		RemoteAddr: "bot.example.com:502",
+		TxTimeout:  time.Second,
+		UnitID:     0x01,
+	}
+	defer client.Close()
+```
+
+
 ### Testing
 
 Run `go test` with a server on localhost as follows.
